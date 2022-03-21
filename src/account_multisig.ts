@@ -326,12 +326,7 @@ export class Account2FA extends AccountMultisig {
         let cleanupActions = [];
         const keyConversionActions = await this.get2faDisableKeyConversionActions();
         if(cleanupContractBytes) {
-            await this.deleteAllRequests().catch(e => {
-                if(new RegExp(MultisigDeleteRequestRejectionError.REQUEST_COOLDOWN_ERROR).test(e?.kind?.ExecutionError)) {
-                    return e;
-                }
-                throw e;
-            });
+            await this.deleteAllRequests().catch(e => e);
             cleanupActions = await this.get2faDisableCleanupActions(cleanupContractBytes);
         }
 
@@ -387,12 +382,11 @@ export class Account2FA extends AccountMultisig {
     }
 
     async disable(contractBytes: Uint8Array, cleanupContractBytes: Uint8Array) {
-        await this.deleteAllRequests().catch(e => {
-            if(new RegExp(MultisigDeleteRequestRejectionError.REQUEST_COOLDOWN_ERROR).test(e?.kind?.ExecutionError)) {
-                return e;
-            }
-            throw e;
-        });
+        const [,stateValidity] = await this.checkMultisigCodeAndStateStatus();
+        if(stateValidity !== MultisigStateStatus.VALID_STATE && stateValidity !== MultisigStateStatus.STATE_NOT_INITIALIZED) {
+            throw new TypedError(`Can not deploy a contract to account ${this.accountId} on network ${this.connection.networkId}, the account state could not be verified.`, 'ContractStateUnknown');
+        }
+        await this.deleteAllRequests().catch(e => e);
         const actions = [
             ...(await this.get2faDisableCleanupActions(cleanupContractBytes)),
             ...(await this.get2faDisableKeyConversionActions()),
